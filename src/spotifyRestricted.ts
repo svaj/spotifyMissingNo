@@ -1,4 +1,5 @@
 import { type AccessToken, SpotifyApi, type Track, type SavedTrack } from '@spotify/web-api-ts-sdk'
+import { writeFileSync } from 'fs'
 
 export const SCOPES = ['user-library-read']
 export const PER_PAGE = 50
@@ -14,29 +15,34 @@ export class SpotifyRestricted {
 
   constructor (opts: SRConstructorType) {
     if ((opts.accessToken?.access_token) != null) {
-      console.info("Made with access token", opts.accessToken.access_token)
+      console.info('Made with access token', opts.accessToken.access_token)
       this.client = SpotifyApi.withAccessToken(opts.clientId, opts.accessToken)
     } else {
       this.client = SpotifyApi.withClientCredentials(opts.clientId, opts.clientSecret ?? '', SCOPES)
     }
   }
 
-  async findRestrictedTracks (playlistId?: string): Promise<SavedTrack[]> {
+  async findRestrictedTracks (playlistId?: string): Promise<Track[]> {
+    let allResults: SavedTrack[] = []
     if (playlistId != null) {
       console.info('Not implemented yet')
       return []
     } else {
       let processedTracksCount = 0
       let totalTracks = 0
-      const restrictedTracks: SavedTrack[] = []
+      let restrictedTracks: Track[] = []
       do {
+        // TODO GET current user's market
         // fetch page of tracks
-        const resultsPage = await this.client.currentUser.tracks.savedTracks(PER_PAGE, processedTracksCount)
+        const resultsPage = await this.client.currentUser.tracks.savedTracks(PER_PAGE, processedTracksCount, 'US')
+        allResults = [...allResults, ...resultsPage.items]
         // find tracks
-        restrictedTracks.concat(SpotifyRestricted.filterRestrictedSavedTracks(resultsPage.items))
+        restrictedTracks = [...restrictedTracks, ...SpotifyRestricted.filterRestrictedSavedTracks(resultsPage.items)]
         totalTracks = resultsPage.total
         processedTracksCount += PER_PAGE
       } while (processedTracksCount < totalTracks)
+      writeFileSync('savedTracks.json', JSON.stringify(allResults))
+      writeFileSync('restrictedTracks.json', JSON.stringify(restrictedTracks))
       return restrictedTracks
     }
   }
@@ -45,17 +51,17 @@ export class SpotifyRestricted {
     return items.filter((track: Track) => !(track.is_playable ?? false) || track.restrictions?.reason)
   }
 
-  static filterRestrictedSavedTracks = (items: SavedTrack[]): SavedTrack[] => {
-    return items.filter((track: SavedTrack) => !(track.track.is_playable ?? false) || track.track.restrictions?.reason)
-  }
+  static filterRestrictedSavedTracks = (items: SavedTrack[]): Track[] => SpotifyRestricted.filterRestrictedTracks(items.map((track: SavedTrack) => track.track))
 
   static printTrack = (track: Track): void => {
-    console.info(`${track.id}, ${track.artists.join(', ')} - ${track.name} | Reason: ${track.restrictions?.reason}`)
+    console.info(`${track.id}, ${SpotifyRestricted.getArtistsStr(track)} - ${track.name} | Reason: ${track.restrictions?.reason}`)
   }
 
   static printSavedTrack = (track: SavedTrack): void => {
-    console.info(`${track.track.id}, ${track.track.artists.join(', ')} - ${track.track.name} | Reason: ${track.track.restrictions?.reason}`)
+    SpotifyRestricted.printTrack(track.track)
   }
+
+  static getArtistsStr = (track: Track): string => track.artists.map(artist => artist.name).join(', ')
 
   static SCOPES = SCOPES
 }

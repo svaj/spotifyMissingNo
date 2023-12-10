@@ -27,7 +27,7 @@ export const main = async (): Promise<void> => {
     const restrictedTracks = await restrictedFinderUser.findRestrictedTracks()
 
     console.info('Restricted tracks:')
-    restrictedTracks?.map(SpotifyRestricted.printSavedTrack)
+    restrictedTracks?.map(SpotifyRestricted.printTrack)
     res.send(restrictedTracks)
   })
 
